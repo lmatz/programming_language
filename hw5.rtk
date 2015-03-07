@@ -54,59 +54,56 @@
                (int (+ (int-num v1) 
                        (int-num v2)))
                (error "MUPL addition applied to non-number")))]
-        [(int? e)
-          e]
+        ;; CHANGE add more cases here
+        ;; 简单来说, 不用检查语法, 肯定是会evaluate成value, 但
+        ;; 是否正确类型的value出现在正确的位置, 需要检查. 
+        [(int? e) e]
+        [(closure? e) e]
+        [(aunit? e) e]
+        [(fun? e) 
+           (closure env e)]
         [(ifgreater? e)
          (let ([v1 (eval-under-env (ifgreater-e1 e) env)]
                [v2 (eval-under-env (ifgreater-e2 e) env)])
            (if (and (int? v1) (int? v2))
                (if (> (int-num v1) (int-num v2))
-                   (eval-under-env (ifgreater-e3 e) env) 
+                   (eval-under-env (ifgreater-e3 e) env)
                    (eval-under-env (ifgreater-e4 e) env))
-               (error "MUPL ifgreater applied to non-number")))]
-        [(fun? e)
-         (letrec ([funcname (fun-nameopt e)]
-                  [newenv (if funcname
-                              (cons (cons funcname newclosure) env)
-                              env)]
-                  [newclosure (closure newenv (fun-body e))])
-           newclosure)]      
-        [(call? e)
-         (letrec ([arg (eval-under-env (call-actual e) env)]
-               [curclosure (eval-under-env (call-funexp e) env)]
-               [funcbody (fun-body (closure-fun curclosure))]
-               [funcformal (fun-formal (closure-fun curclosure))])
-           (if (closure? curclosure)
-               (eval-under-env (fun-body (closure-fun curclosure)) (cons (cons funcformal arg) (closure-env curclosure)))
-               (error "MUPL can't call a function that isn't a closure")))]
+               (error "ifgreater e1 e2 non-number")))]
         [(mlet? e)
-         (letrec ([val (eval-under-env (mlet-e e) env)]
-               [newenv (cons (cons (mlet-var e) val) env)])
-           (eval-under-env (mlet-body e) newenv))]
+         (let ([v1 (eval-under-env (mlet-e e) env)])
+           (eval-under-env (mlet-body e) 
+                           (cons (cons (mlet-var e) v1) 
+                                 env)))]
+        [(call? e)
+         (let ([cl (eval-under-env (call-funexp e) env)]
+               [actual-arg (eval-under-env (call-actual e) env)]
+               )
+           (if (closure? cl)
+               (let* ([fn (closure-fun cl)]
+                      [arg-name (fun-formal fn)]
+                      [fn-name (fun-nameopt fn)]
+                      [eva-env (cons (cons fn-name cl) ; fn-name = #f ?
+                                     (cons (cons arg-name actual-arg) 
+                                           (closure-env cl)))]) 
+                 (eval-under-env (fun-body fn) eva-env))
+               (error "first expression of call is not closure")))]
         [(apair? e)
-         (letrec ([p1 (eval-under-env (apair-e1 e) env)]
-                 [p2 (eval-under-env (apair-e2 e) env)])
-           (apair p1 p2))]
+         (let ([v1 (eval-under-env (apair-e1 e) env)]
+               [v2 (eval-under-env (apair-e2 e) env)])
+           (apair v1 v2))]
         [(fst? e)
-         (let ([p (eval-under-env (fst-e e) env)])
-           (if (apair? p)
-               (apair-e1 p)
-               (error "MULP fst applied to non-pair")))]
+         (let ([v (eval-under-env (fst-e e) env)])
+           (if (apair? v) (apair-e1 v)
+               (error "apply non-apair to fst")))]
         [(snd? e)
-         (let ([p (eval-under-env (snd-e e) env)])
-           (if (apair? p)
-               (apair-e2 p)
-               (error "MULP fst applied to non-pair")))]
-        [(aunit? e)
-         (aunit)]
+         (let ([v (eval-under-env (snd-e e) env)])
+           (if (apair? v) (apair-e2 v)
+               (error "apply non-apair to snd")))]
         [(isaunit? e)
-         (let ([p (eval-under-env (isaunit-e e) env)])
-           (if (aunit? p)
-               (int 1)
-               (int 0)))]
-        [(closure? e)
-         (closure (append (closure-env e) env) (closure-fun e))]
-        [#t ((error (format "bad MUPL expression: ~v" e)))]))
+         (if (aunit? (eval-under-env (isaunit-e e) env)) (int 1)
+             (int 0))]
+        [#t (error (format "bad MUPL expression: ~v" e))]))
 
 
 (define (eval-exp e)
@@ -153,7 +150,8 @@
 
 (define mupl-mapAddN 
   (mlet "map" mupl-map
-        "CHANGE (notice map is now in MUPL scope)"))
+        (fun #f "added" (call (var "map") 
+                              (fun #f "toadd" (add (var "toadd") (var "added")))))))
 
 ;; Challenge Problem
 
