@@ -54,9 +54,6 @@
                (int (+ (int-num v1) 
                        (int-num v2)))
                (error "MUPL addition applied to non-number")))]
-        ;; CHANGE add more cases here
-        ;; 简单来说, 不用检查语法, 肯定是会evaluate成value, 但
-        ;; 是否正确类型的value出现在正确的位置, 需要检查. 
         [(int? e) e]
         [(closure? e) e]
         [(aunit? e) e]
@@ -83,7 +80,7 @@
                (let* ([fn (closure-fun cl)]
                       [arg-name (fun-formal fn)]
                       [fn-name (fun-nameopt fn)]
-                      [eva-env (cons (cons fn-name cl) ; fn-name = #f ?
+                      [eva-env (cons (cons fn-name cl)
                                      (cons (cons arg-name actual-arg) 
                                            (closure-env cl)))]) 
                  (eval-under-env (fun-body fn) eva-env))
@@ -159,8 +156,27 @@
 
 ;; We will test this function directly, so it must do
 ;; as described in the assignment
-(define (compute-free-vars e) "CHANGE")
-
+(define (compute-free-vars e) 
+  (define (compute-used e) 
+    (cond [(var? e) (set (var-string e))]
+          [(add? e) (set-union (compute-used (add-e1 e))
+                               (compute-used (add-e2 e)))]
+          [(apair? e) (set-union (compute-used (apair-e1 e))
+                                 (compute-used (apair-e2 e)))]
+          [(fst? e) (compute-used (fst-e e))]
+          [(snd? e) (compute-used (snd-e e))]
+          [(isaunit? e) (compute-used (isaunit-e e))]
+          ;at call site, don't consider callee's used variables, that's responsible
+          ;by function definition's environment
+          [(call? e) (compute-used (call-actual e))]
+          [(ifgreater? e) (set-union (compute-used (ifgreater-e1 e))
+                                     (compute-used (ifgreater-e2 e))
+                                     (compute-used (ifgreater-e3 e))
+                                     (compute-used (ifgreater-e4 e)))]
+          [(fun-challenge? e) (compute-used (fun-challenge-body e))]
+          [(mlet? e) (set-union (compute-used (mlet-e e)) (compute-used (mlet-body e)))]
+          [#t (error "unexpected expression of interpreted language")]
+          ))
 ;; Do NOT share code with eval-under-env because that will make
 ;; auto-grading and peer assessment more difficult, so
 ;; copy most of your interpreter here and make minor changes
